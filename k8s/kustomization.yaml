@@ -1,3 +1,10 @@
 resources:
-  - secret.yaml
   - configmap.yaml
+
+secretGenerator:
+  - name: abc
+    envs:
+      - secret.env
+    options:
+      annotations:
+        abc.argocd.io/path: remote-templates

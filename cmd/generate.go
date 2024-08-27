@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"regexp"
@@ -59,14 +60,21 @@ var generateCmd = &cobra.Command{
 
 				if obj, ok := manifest.Object["data"].(map[string]interface{}); ok {
 					for key, val := range obj {
-						matched, err := regexp.MatchString("<[a-zA-Z0-9_]*>", val.(string))
+						decodedVal, err := base64.StdEncoding.DecodeString(val.(string))
+						if err != nil {
+							log.Fatal(err)
+						}
+
+						decodedStringVal := string(decodedVal)
+
+						matched, err := regexp.MatchString("<[a-zA-Z0-9_]*>", decodedStringVal)
 						if err != nil {
 							log.Fatal(err)
 						}
 
 						if matched {
-							transformedVal := (val.(string))[1 : len(val.(string))-1]
-							obj[key] = secretMap[transformedVal]
+							transformedVal := decodedStringVal[1 : len(decodedStringVal)-1]
+							obj[key] = base64.StdEncoding.EncodeToString([]byte(secretMap[transformedVal]))
 						}
 					}
 				}
