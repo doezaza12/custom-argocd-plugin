@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -27,13 +28,15 @@ var generateCmd = &cobra.Command{
 		for _, manifest := range manifests {
 			if manifest.GetKind() == "Secret" {
 
+				id := uuid.New()
+
 				existingAnnotations := manifest.GetAnnotations()
 				if existingAnnotations == nil {
 					existingAnnotations = map[string]string{
-						"trustme": "imdevops",
+						"checksum": id.String(),
 					}
 				} else {
-					existingAnnotations["trustme"] = "imdevops"
+					existingAnnotations["checksum"] = id.String()
 				}
 
 				manifest.SetAnnotations(existingAnnotations)
