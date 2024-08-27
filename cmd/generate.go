@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/doezaza12/custom-argocd-plugin/pkg/gitlab"
+	"github.com/doezaza12/custom-argocd-plugin/pkg/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
@@ -44,7 +45,7 @@ var generateCmd = &cobra.Command{
 				manifest.SetAnnotations(existingAnnotations)
 			}
 
-			if val, ok := existingAnnotations["abc.argocd.io/path"]; ok {
+			if val, ok := existingAnnotations[types.AnnotationIndicator]; ok {
 				listGroupVariables, err := gitlab.ListGitLabVariables(val)
 				if err != nil {
 					log.Fatal(err)
