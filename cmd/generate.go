@@ -8,7 +8,6 @@ import (
 
 	"github.com/doezaza12/custom-argocd-plugin/pkg/gitlab"
 	"github.com/doezaza12/custom-argocd-plugin/pkg/types"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,55 +32,42 @@ var generateCmd = &cobra.Command{
 			existingAnnotations := manifest.GetAnnotations()
 
 			if manifest.GetKind() == "Secret" {
-				id := uuid.New()
-
-				if existingAnnotations == nil {
-					existingAnnotations = map[string]string{
-						"checksum": id.String(),
+				if val, ok := existingAnnotations[types.AnnotationIndicator]; ok {
+					listGroupVariables, err := gitlab.ListGitLabVariables(val)
+					if err != nil {
+						log.Fatal(err)
 					}
-				} else {
-					existingAnnotations["checksum"] = id.String()
-				}
 
-				manifest.SetAnnotations(existingAnnotations)
-			}
+					// Construct map to easier retrieve
+					secretMap := make(map[string]string)
+					for _, groupVariable := range listGroupVariables {
+						secretMap[groupVariable.Key] = groupVariable.Value
+					}
 
-			if val, ok := existingAnnotations[types.AnnotationIndicator]; ok {
-				listGroupVariables, err := gitlab.ListGitLabVariables(val)
-				if err != nil {
-					log.Fatal(err)
-				}
+					if obj, ok := manifest.Object["data"].(map[string]interface{}); ok {
+						for key, val := range obj {
+							decodedVal, err := base64.StdEncoding.DecodeString(val.(string))
+							if err != nil {
+								log.Fatal(err)
+							}
 
-				// Construct map to easier retrieve
-				secretMap := make(map[string]string)
-				for _, groupVariable := range listGroupVariables {
-					secretMap[groupVariable.Key] = groupVariable.Value
-				}
+							decodedStringVal := string(decodedVal)
 
-				if obj, ok := manifest.Object["data"].(map[string]interface{}); ok {
-					for key, val := range obj {
-						decodedVal, err := base64.StdEncoding.DecodeString(val.(string))
-						if err != nil {
-							log.Fatal(err)
-						}
+							matched, err := regexp.MatchString("<[a-zA-Z0-9_]*>", decodedStringVal)
+							if err != nil {
+								log.Fatal(err)
+							}
 
-						decodedStringVal := string(decodedVal)
-
-						matched, err := regexp.MatchString("<[a-zA-Z0-9_]*>", decodedStringVal)
-						if err != nil {
-							log.Fatal(err)
-						}
-
-						if matched {
-							transformedVal := decodedStringVal[1 : len(decodedStringVal)-1]
-							obj[key] = base64.StdEncoding.EncodeToString([]byte(secretMap[transformedVal]))
+							if matched {
+								transformedVal := decodedStringVal[1 : len(decodedStringVal)-1]
+								obj[key] = base64.StdEncoding.EncodeToString([]byte(secretMap[transformedVal]))
+							}
 						}
 					}
 				}
 			}
 
 			output, err := yaml.Marshal(manifest.Object)
-
 			if err != nil {
 				log.Fatal(err)
 			}
