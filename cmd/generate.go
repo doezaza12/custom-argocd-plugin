@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 
 	"github.com/doezaza12/custom-argocd-plugin/pkg/gitlab"
 	"github.com/doezaza12/custom-argocd-plugin/pkg/types"
@@ -21,6 +24,7 @@ var generateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var manifests []unstructured.Unstructured
 		var err error
+		var swapGeneratedName map[string]string
 
 		// read input from stdin
 		manifests, err = readManifestData(cmd.InOrStdin())
@@ -53,7 +57,7 @@ var generateCmd = &cobra.Command{
 
 							decodedStringVal := string(decodedVal)
 
-							matched, err := regexp.MatchString("<[a-zA-Z0-9_]*>", decodedStringVal)
+							matched, err := regexp.MatchString("<[a-zA-Z0-9_]+>", decodedStringVal)
 							if err != nil {
 								log.Fatal(err)
 							}
@@ -61,6 +65,23 @@ var generateCmd = &cobra.Command{
 							if matched {
 								transformedVal := decodedStringVal[1 : len(decodedStringVal)-1]
 								obj[key] = base64.StdEncoding.EncodeToString([]byte(secretMap[transformedVal]))
+							}
+						}
+
+						// Calculate new hash based-on current secrets for secret name suffix
+						data, err := json.Marshal(manifest.Object["data"])
+						if err != nil {
+							log.Fatal(err)
+						}
+
+						manifestName := manifest.GetName()
+						hashSuffix := fmt.Sprintf("%x", sha256.Sum256([]byte(data)))
+						enc := []rune(hashSuffix[:10])
+						if _, ok := swapGeneratedName[manifestName]; ok {
+							swapGeneratedName[manifest.GetName()] = string(enc)
+						} else {
+							swapGeneratedName = map[string]string{
+								manifestName: fmt.Sprintf("%s%s", manifestName[:len(manifestName)-10], string(enc)),
 							}
 						}
 					}
@@ -72,7 +93,16 @@ var generateCmd = &cobra.Command{
 				log.Fatal(err)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "%s---\n", output)
+			var finalOutput string
+			for key, val := range swapGeneratedName {
+				finalOutput = strings.ReplaceAll(string(output), key, val)
+			}
+
+			if finalOutput != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s---\n", finalOutput)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s---\n", output)
+			}
 		}
 	},
 }

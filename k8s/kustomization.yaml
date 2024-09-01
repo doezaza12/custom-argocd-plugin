@@ -1,4 +1,5 @@
 resources:
+  - deployment.yaml
   - configmap.yaml
 
 secretGenerator:
@@ -7,4 +8,4 @@ secretGenerator:
       - secret.env
     options:
       annotations:
-        abc.argocd.io/path: remote-templates
+        ccoe-secretengine.kubernetes.io/path: remote-templates
